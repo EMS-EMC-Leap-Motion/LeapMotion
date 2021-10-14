@@ -1,0 +1,241 @@
+<head>
+    <script src="//js.leapmotion.com/leap-1.1.0.min.js"></script>
+    <style>
+        .mouse-pointer {
+            /* cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="22" width="22"><circle fill="orange" cx="50%" cy="50%" r="50%"/></svg>'), auto; */
+            cursor: none;
+        }
+        html {
+            height: 100%;
+        }
+        body {
+            height: 100%;
+            margin: 0;
+            display: grid;
+            grid-template: "scoreboard" min-content
+                           "game" auto / 1fr;
+            background: whitesmoke;
+            text-align: center;
+        }
+        h2 {
+            grid-area: scoreboard;
+        }
+        #pointingArea {
+            grid-area: game;
+            margin: 4em;
+            background: palegoldenrod;
+            position: relative;
+        }
+        #pointingArea #target {
+            position: absolute;
+            width: 8em;
+            height: 8em;
+            transform: translate(-50%, -50%);
+        }
+        #pointingArea #pointer {
+            position: absolute;
+            width: 1em;
+            height: 1em;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <ul>
+        <h2>Points: <span id="scoreboard"></span></h2>
+        <p>Game speed <input id="speedSlider" type="range" value="0" min="-5" max="10"/></p>
+        <p>Pointer delay <input id="delaySlider" type="range" value="0" min="0" max="300"/></p>
+    </ul>
+    
+    <div id="pointingArea">
+        <!-- This draws the shape of the target: A red dot with two concentric rings -->
+        <svg id="target">
+            <circle cx="50%" cy="50%" r="45%" stroke-width="10%" stroke="red" fill-opacity="0"/>
+            <circle cx="50%" cy="50%" r="25%" stroke-width="10%" stroke="red" fill-opacity="0"/>
+            <circle cx="50%" cy="50%" r="5%"  stroke-width="10%" stroke="red" fill-opacity="0"/>
+        </svg>
+        <svg id="pointer">
+            <circle fill="orange" cx="50%" cy="50%" r="50%"/>
+        </svg>
+    </div>
+
+    <script>
+        // This TPS is defined relative to the `milliseconds` given to `isTickDue` -
+        // to control the speed of the `Game`, you should use the `gameSpeedMultiplier` below.
+        const TICKS_PER_SECOND = 20;
+        class Game {
+            constructor() {
+                // The coordinates of the game area are within
+                // { x: [0, 1], y: [0, 1] }
+
+                this.score = 0;
+                this.currentTick = 0;
+                // The position that the player needs to aim for
+                this.target = {
+                    x: 0.5,
+                    y: 0.5,
+
+                    // Some extra state we use for implementing the movement of the target
+                    jitter: {
+                        lastChange: this.currentTick,
+                        velocity: {
+                            x: 0,
+                            y: 0,
+                        }
+                    }
+                };
+                // Tracks the position the player is pointing at.
+                // null when a pointing device is not directed at the game.
+                this.pointer = null;
+                // FIXME: Disconnection from time
+                this.pointerDelay = 0;
+            }
+            /**
+             * @param event {MouseEvent}
+             * @param sourceElement {HTMLElement}
+             */
+            sendMouseMove(event, sourceElement) {
+                const rect = sourceElement.getBoundingClientRect();
+                // TODO: Remove time from this implementation
+                setTimeout(() => {
+                    this.pointer = {
+                        x: (event.clientX - rect.left) / rect.width,
+                        y: (event.clientY - rect.top) / rect.height,
+                    };
+                }, this.pointerDelay)
+            }
+            setPointerDelay(ticks) {
+                this.pointerDelay = ticks;
+            }
+            removePointer() {
+                this.pointer = null;
+            }
+            applyJitter() {
+                // If 2s/(positive number) < (the time since we last changed),
+                const ticksSinceChange = this.currentTick - this.target.jitter.lastChange;
+                if (10 * TICKS_PER_SECOND * Math.random() < ticksSinceChange) {
+                    this.target.jitter.lastChange = this.currentTick;
+                    // we pick a new random direction for the target to move in
+                    let theta = Math.random() * 2 * Math.PI;
+                    // 180 is a magic number I picked because it felt right
+                    let magnitude = 0.005 + Math.random() / 80;
+                    this.target.jitter.velocity = {
+                        x: Math.cos(theta) * magnitude,
+                        y: Math.sin(theta) * magnitude,
+                    };
+                }
+                // If we hit the wall, bounce
+                if (Math.abs(this.target.x + this.target.jitter.velocity.x - 0.5) > 0.5) this.target.jitter.velocity.x *= -1;
+                if (Math.abs(this.target.y + this.target.jitter.velocity.y - 0.5) > 0.5) this.target.jitter.velocity.y *= -1;
+                this.target.x += this.target.jitter.velocity.x;
+                this.target.y += this.target.jitter.velocity.y;
+                
+            }
+            tick() {
+                this.currentTick++;
+                this.applyJitter();
+                if (this.pointer) {
+                    // Add (distance from target)^-2 to the player score
+                    const distance = (this.target.x - this.pointer.x)**2 + (this.target.y - this.pointer.y)**2;
+                    if (distance !== 0) this.score += 1/(distance);
+                }
+            }
+            /**
+             * @param {{ target: HTMLElement }}
+             */
+            renderTo({ target }) {
+                setAbsolutePosition(target, this.target);
+            }
+        }
+        /**
+         * @param el {HTMLElement}
+         * @param {{ x: number, y: number }}
+         */
+        function setAbsolutePosition(el, { x, y }) {
+            const parentRect = el.parentElement.getBoundingClientRect();
+            // Find new position of `target`
+            el.style.left = parentRect.width * x;
+            el.style.top = parentRect.height * y;
+        }
+        // Here, we rig up the DOM and input apis to our game logic
+        const scoreboard = document.getElementById("scoreboard");
+        const pointingArea = document.getElementById("pointingArea");
+        const target = document.getElementById("target");
+        const pointer = document.getElementById("pointer");
+        
+        // Store mouse input in a oneshot buffer, ignoring any stale events.
+        /** @type {{ type: "none" } | { type: "leave" } | { type: "move", event: MouseEvent }} */
+        let pendingMouseEvent = { type: "none" };
+        pointingArea.addEventListener("mousemove", function(event) { pendingMouseEvent = { type: "move", event } });
+        pointingArea.addEventListener("mouseleave", function() { pendingMouseEvent = { type: "leave" } });
+        // TODO: When the leap motion sensor is being used, stop tracking the mouse
+        pointingArea.classList.add("mouse-pointer");
+        
+        const game = new Game();
+        GLOBAL_APP = game;
+        
+        let gameSpeedMultiplier = 1;
+        document.getElementById("speedSlider").addEventListener("change", ev => {
+            gameSpeedMultiplier = 2 ** ev.target.value;
+        });
+        document.getElementById("delaySlider").addEventListener("change", ev => {
+            game.setPointerDelay(ev.target.value);
+        });
+        const leapController = new Leap.Controller();
+        leapController.connect();
+        
+        // Render the initial game state early so that it is immediately shown
+        game.renderTo({ target });
+        let lastTickTime = performance.now();
+        frame(lastTickTime)
+        function frame(wallTime) {
+            // Input
+            const leapFrame = leapController.frame();
+            if (leapFrame.valid && leapFrame.hands[0]) {
+                const [x, y] = leapFrame.hands[0].palmPosition;
+                game.pointer = {
+                    // Map the palm coordinates to our [0, 1] game space
+                    x: Math.max(0, Math.min(1, (x + 40) / 120)),
+                    y: Math.max(0, Math.min(1, 1 - ((y - 40) / 140))),
+                }
+            }
+            switch (pendingMouseEvent.type) {
+                case "leave":
+                    game.removePointer();
+                    break;
+                case "move":
+                    game.sendMouseMove(pendingMouseEvent.event, pointingArea);
+                    break;
+            }
+            pendingMouseEvent = { type: "none" }
+            
+            // The cursor should always be rendered at the full framerate,
+            // to keep the UI feeling responsive
+            if (game.pointer) {
+                setAbsolutePosition(pointer, game.pointer);
+
+                // Game pointer should only be visible when it is active
+                pointer.style.display = "initial";
+            } else {
+                pointer.style.display = "none";
+            }
+
+            const tickLength = (1000 / TICKS_PER_SECOND) / gameSpeedMultiplier;
+            let tickDelta = wallTime - lastTickTime;
+            if (tickDelta > tickLength) {
+                // Game logic
+                do {
+                    game.tick();
+                    tickDelta -= tickLength;
+                } while (tickDelta > tickLength);
+                lastTickTime = wallTime - tickDelta;
+
+                // Rendering
+                game.renderTo({ target });
+                scoreboard.innerText = (game.score / 100).toFixed(0);
+            }
+
+            requestAnimationFrame(frame);
+        }
+    </script>
+</body>
