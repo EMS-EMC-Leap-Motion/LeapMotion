@@ -44,7 +44,6 @@
     <ul>
         <h2>Points: <span id="scoreboard"></span></h2>
         <span>
-        <p>Game speed <input id="speedSlider" type="range" value="0" min="-5" max="10"/></p>
         <p>Pointer delay <input id="delaySlider" type="range" value="0" min="0" max="300"/></p>
         </span>
         <span>
@@ -188,13 +187,6 @@
         const game = new Game();
         GLOBAL_APP = game;
         
-        let gameSpeedMultiplier = 1;
-        document.getElementById("speedSlider").addEventListener("change", ev => {
-            gameSpeedMultiplier = 2 ** ev.target.value;
-        });
-        document.getElementById("delaySlider").addEventListener("change", ev => {
-            game.setPointerDelay(ev.target.value);
-        });
         const leapController = new Leap.Controller();
         leapController.connect();
         
@@ -244,7 +236,7 @@
                 pointer.style.display = "none";
             }
 
-            const tickLength = (1000 / TICKS_PER_SECOND) / gameSpeedMultiplier;
+            const tickLength = (1000 / TICKS_PER_SECOND);
             let tickDelta = wallTime - lastTickTime;
             if (tickDelta > tickLength) {
                 // Game logic
