@@ -43,8 +43,13 @@
 <body>
     <ul>
         <h2>Points: <span id="scoreboard"></span></h2>
+        <span>
         <p>Game speed <input id="speedSlider" type="range" value="0" min="-5" max="10"/></p>
         <p>Pointer delay <input id="delaySlider" type="range" value="0" min="0" max="300"/></p>
+        </span>
+        <span>
+            <button id="export">Export</button>
+        </span>
     </ul>
     
     <div id="pointingArea">
@@ -162,6 +167,7 @@
         const pointingArea = document.getElementById("pointingArea");
         const target = document.getElementById("target");
         const pointer = document.getElementById("pointer");
+        const exportButton = document.getElementById("export");
         
         // Store mouse input in a oneshot buffer, ignoring any stale events.
         /** @type {{ type: "none" } | { type: "leave" } | { type: "move", event: MouseEvent }} */
@@ -171,6 +177,14 @@
         // TODO: When the leap motion sensor is being used, stop tracking the mouse
         pointingArea.classList.add("mouse-pointer");
         
+        const frameData = [];
+        exportButton.addEventListener("click", function() {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([JSON.stringify(frameData)], {type : 'application/json'}));
+            link.download = "frameData";
+            link.click();
+        });
+
         const game = new Game();
         GLOBAL_APP = game;
         
@@ -189,6 +203,16 @@
         let lastTickTime = performance.now();
         frame(lastTickTime)
         function frame(wallTime) {
+            frameData.push({
+                palmPosition: game.pointer ? {
+                    x: game.pointer.x,
+                    y: game.pointer.y,
+                } : null,
+                targetPosition: {
+                    x: game.target.x,
+                    y: game.target.y,
+                },
+            });
             // Input
             const leapFrame = leapController.frame();
             if (leapFrame.valid && leapFrame.hands[0]) {
