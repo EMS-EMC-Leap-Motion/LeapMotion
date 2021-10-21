@@ -1,5 +1,5 @@
 <head>
-    <script src="//js.leapmotion.com/leap-1.1.0.min.js"></script>
+    <script src="https://js.leapmotion.com/leap-1.1.0.min.js"></script>
     <style>
         .mouse-pointer {
             /* cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="22" width="22"><circle fill="orange" cx="50%" cy="50%" r="50%"/></svg>'), auto; */
@@ -44,7 +44,7 @@
     <ul>
         <h2>Points: <span id="scoreboard"></span></h2>
         <span>
-        <p>Pointer delay <input id="delaySlider" type="range" value="0" min="0" max="300"/></p>
+            <p>Pointer delay <input id="delaySlider" type="range" value="0" min="0" max="300"/></p>
         </span>
         <span>
             <button id="export">Export</button>
@@ -133,7 +133,7 @@
                 if (Math.abs(this.target.y + this.target.jitter.velocity.y - 0.5) > 0.5) this.target.jitter.velocity.y *= -1;
                 this.target.x += this.target.jitter.velocity.x;
                 this.target.y += this.target.jitter.velocity.y;
-                
+
             }
             tick() {
                 this.currentTick++;
